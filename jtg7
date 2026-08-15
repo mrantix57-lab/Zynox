@@ -1,0 +1,43 @@
+#!/bin/bash
+# ============================================
+#   ZYNEX Skyport Panel Installer
+# ============================================
+clear
+cat << "EOF"
+██╗  ██╗██╗   ██╗███╗   ██╗███████╗██╗  ██╗
+╚██╗██╔╝╚██╗ ██╔╝████╗  ██║██╔════╝╚██╗██╔╝
+ ╚███╔╝  ╚████╔╝ ██╔██╗ ██║█████╗   ╚███╔╝ 
+ ██╔██╗   ╚██╔╝  ██║╚██╗██║██╔══╝   ██╔██╗ 
+██╔╝ ██╗   ██║   ██║ ╚████║███████╗██╔╝ ██╗
+╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
+EOF
+echo ""
+echo "  ZYNEX Skyport Panel Installer"
+echo "  ============================="
+echo ""
+
+echo "[Zynex] Installing Skyport Panel..."
+git clone https://github.com/skyport-team/panel
+if [ ! -d "panel" ]; then
+    echo "[Zynex] ERROR: Failed to clone panel."
+    exit 1
+fi
+
+echo "[Zynex] Installing dependencies..."
+cd panel
+npm install
+
+echo "[Zynex] Creating config..."
+cp example_config.json config.json
+
+echo "[Zynex] Seeding images..."
+npm run seed
+
+echo "[Zynex] Starting panel on port 5001..."
+pm2 start index.js --name skyport
+pm2 save
+
+IP=$(curl -s ifconfig.me)
+echo ""
+echo "[Zynex] Panel installed and running!"
+echo "[Zynex] Open: http://$IP:5001"

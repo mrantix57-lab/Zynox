@@ -1,0 +1,40 @@
+#!/bin/bash
+# ============================================
+#   ZYNEX Skyport Node (Daemon) Installer
+# ============================================
+clear
+cat << "EOF"
+██╗  ██╗██╗   ██╗███╗   ██╗███████╗██╗  ██╗
+╚██╗██╔╝╚██╗ ██╔╝████╗  ██║██╔════╝╚██╗██╔╝
+ ╚███╔╝  ╚████╔╝ ██╔██╗ ██║█████╗   ╚███╔╝ 
+ ██╔██╗   ╚██╔╝  ██║╚██╗██║██╔══╝   ██╔██╗ 
+██╔╝ ██╗   ██║   ██║ ╚████║███████╗██╔╝ ██╗
+╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
+EOF
+echo ""
+echo "  ZYNEX Skyport Node Installer"
+echo "  ============================"
+echo ""
+
+echo "[Zynex] Installing Skyport Daemon..."
+git clone https://github.com/skyport-team/skyportd
+if [ ! -d "skyportd" ]; then
+    echo "[Zynex] ERROR: Failed to clone skyportd."
+    exit 1
+fi
+
+echo "[Zynex] Installing dependencies..."
+cd skyportd
+npm install
+
+echo ""
+echo "[Zynex] Paste your Node Configure command and press Enter:"
+read -r configure_command
+eval "$configure_command"
+
+echo "[Zynex] Starting daemon..."
+pm2 start . --name skyportd
+pm2 save
+
+echo ""
+echo "[Zynex] Node is online!"
