@@ -1,0 +1,192 @@
+#!/bin/bash
+# ============================================================
+#   ZYNEX PTERODACTYL INSTALLER  -  Zynex / ZYNEX PANEL
+#   Pterodactyl Panel + Wings (Docker) management menu
+#   Run: bash <(curl -s https://raw.githubusercontent.com/mrantix57-lab/Zynox/main/ptero)
+# ============================================================
+
+N='\033[0m'; B='\033[1;34m'; G='\033[1;32m'; Y='\033[1;33m'; R='\033[1;31m'; C='\033[1;36m'
+ROOT=0
+
+print_logo() {
+  clear
+  echo -e "${B}========================================================${N}"
+  echo -e "${C}                     ZYNEX PANEL${N}"
+  echo -e "${Y}            Pterodactyl • Docker • Wings${N}"
+  echo -e "${B}========================================================${N}"
+  echo ""
+}
+
+check_root() {
+  if [ "$(id -u)" != "0" ]; then
+    echo -e "${R}Run as root (sudo) required.${N}"
+    read -p "Press Enter to go back..." x
+    return 1
+  fi
+  return 0
+}
+
+wait_enter() {
+  read -p "Press Enter to return to menu..." x
+}
+
+# ---------------- 1. INSTALL PANEL ----------------
+install_panel() {
+  check_root || return
+  print_logo
+  echo -e "${Y}[1] PTERODACTYL PANEL INSTALL${N}"
+  echo -e "${C}Uses the official Pterodactyl installer (web server + PHP + MySQL).${N}"
+  echo -e "${C}An admin user is created automatically at the end of the install.${N}"
+  echo -e "${C}You will be asked for your domain and database details.${N}"
+  echo ""
+  read -p "Ready to start? (y/N): " ans
+  if [ "${ans,,}" != "y" ]; then wait_enter; return; fi
+
+  apt-get update -y >/dev/null 2>&1
+  apt-get install -y curl tar >/dev/null 2>&1
+
+  cd /var/www || return
+  if [ ! -d /var/www/pterodactyl-installer ]; then
+    echo -e "${Y}Downloading official installer...${N}"
+    curl -Lo pterodactyl-installer.tar.gz https://github.com/pterodactyl/installer/releases/latest/download/pterodactyl-installer.tar.gz
+    tar --transform='s|installer|pterodactyl-installer|' -xzf pterodactyl-installer.tar.gz
+    rm pterodactyl-installer.tar.gz
+  fi
+
+  sudo bash /var/www/pterodactyl-installer/install.sh
+
+  echo ""
+  if [ -d /var/www/pterodactyl ]; then
+    echo -e "${G}Panel installed at /var/www/pterodactyl${N}"
+    echo -e "${G}Open your panel in the browser and log in with the admin you created.${N}"
+  else
+    echo -e "${R}Panel install did not complete. Check the logs above.${N}"
+  fi
+  wait_enter
+}
+
+# ---------------- 2. INSTALL WINGS (DAEMON) ----------------
+install_wings() {
+  check_root || return
+  print_logo
+  echo -e "${Y}[2] WINGS DAEMON INSTALL (Docker)${N}"
+  echo -e "${C}Installs Docker + Wings. You will paste the node config${N}"
+  echo -e "${C}from Panel > Nodes > [your node] > Configuration.${N}"
+  echo ""
+  read -p "Ready to start? (y/N): " ans
+  if [ "${ans,,}" != "y" ]; then wait_enter; return; fi
+
+  echo -e "${Y}Installing Docker...${N}"
+  if ! command -v docker >/dev/null 2>&1; then
+    curl -fsSL https://get.docker.com | bash
+  fi
+  systemctl enable --now docker >/dev/null 2>&1
+
+  echo -e "${Y}Downloading Wings...${N}"
+  mkdir -p /usr/local/bin /etc/pterodactyl
+  case "$(uname -m)" in
+    x86_64|amd64) WARCH="amd64";;
+    aarch64|arm64) WARCH="arm64";;
+    *) echo -e "${R}Unsupported architecture: $(uname -m)${N}"; wait_enter; return;;
+  esac
+  curl -Lo /usr/local/bin/wings "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_${WARCH}"
+  chmod +x /usr/local/bin/wings
+
+  echo -e "${Y}--- Paste your node configuration ---${N}"
+  echo -e "${C}Open Panel > Nodes > your node > Configuration tab,${N}"
+  echo -e "${C}copy the config.yml, then paste it below.${N}"
+  echo -e "${C}End the paste with a line containing only: EOF${N}"
+  read -p "Press Enter to start pasting..." x
+  while IFS= read -r line; do
+    [ "$line" = "EOF" ] && break
+    printf '%s\n' "$line"
+  done > /etc/pterodactyl/config.yml
+
+  if [ ! -s /etc/pterodactyl/config.yml ]; then
+    echo -e "${R}Config was empty - skipping service setup.${N}"
+    wait_enter; return
+  fi
+
+  cat > /etc/systemd/system/wings.service <<'SVC'
+[Unit]
+Description=Pterodactyl Wings Daemon
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+User=root
+WorkingDirectory=/etc/pterodactyl
+LimitNOFILE=4096
+PIDFile=/var/run/wings/daemon.pid
+ExecStart=/usr/local/bin/wings
+Restart=on-failure
+StartLimitInterval=180
+StartLimitBurst=30
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+SVC
+
+  systemctl daemon-reload
+  systemctl enable --now wings
+  echo -e "${G}Wings installed and started.${N}"
+  wait_enter
+}
+
+# ---------------- 3. ADD ADMIN USER ----------------
+add_admin() {
+  check_root || return
+  if [ ! -d /var/www/pterodactyl ]; then
+    echo -e "${R}Panel not found in /var/www/pterodactyl. Install the panel first (option 1).${N}"
+    wait_enter; return
+  fi
+  print_logo
+  echo -e "${Y}[3] ADD ADMIN USER${N}"
+  cd /var/www/pterodactyl || return
+  sudo php artisan p:user:make
+  echo ""
+  wait_enter
+}
+
+# ---------------- 4. RESTART PANEL ----------------
+restart_panel() {
+  check_root || return
+  print_logo
+  echo -e "${Y}[4] RESTART PANEL${N}"
+  systemctl restart nginx 2>/dev/null && echo -e "${G}nginx restarted${N}" || echo -e "${R}nginx not found${N}"
+  FPM=$(systemctl list-unit-files 2>/dev/null | grep -oE 'php[0-9.]*-fpm.service' | head -n1)
+  if [ -n "$FPM" ]; then
+    systemctl restart "$FPM" && echo -e "${G}$FPM restarted${N}"
+  else
+    echo -e "${Y}php-fpm not found via systemctl - skipping${N}"
+  fi
+  if [ -d /var/www/pterodactyl ]; then
+    (cd /var/www/pterodactyl && sudo -u www-data php artisan queue:restart >/dev/null 2>&1 && echo -e "${G}Queue restarted${N}")
+  fi
+  echo -e "${G}Done.${N}"
+  wait_enter
+}
+
+# ---------------- MENU ----------------
+while true; do
+  print_logo
+  echo -e "${B}================  MENU  ================${N}"
+  echo -e "${G} [1]${N}  Install Pterodactyl Panel"
+  echo -e "${G} [2]${N}  Install Daemon (Wings / Docker)"
+  echo -e "${G} [3]${N}  Add Admin User"
+  echo -e "${G} [4]${N}  Restart Panel"
+  echo -e "${G} [5]${N}  Exit"
+  echo -e "${B}=======================================${N}"
+  echo -n "Select [1-5]: "
+  read -r opt
+  case "$opt" in
+    1) install_panel;;
+    2) install_wings;;
+    3) add_admin;;
+    4) restart_panel;;
+    5) clear; echo -e "${C}Bye! - Zynex${N}"; exit 0;;
+    *) echo -e "${R}Invalid option${N}"; sleep 1;;
+  esac
+done
