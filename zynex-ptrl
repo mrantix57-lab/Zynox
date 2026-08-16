@@ -45,24 +45,19 @@ install_panel() {
   print_logo
   echo -e "${Y}[1] INSTALL PTERODACTYL PANEL${N}"
   echo -e "${C}Uses the official Pterodactyl installer (web server + PHP + MySQL).${N}"
-  echo -e "${C}An admin user is created automatically at the end of the install.${N}"
+  echo -e "${C}After the install, use option 3 to create your admin user.${N}"
   echo -e "${C}You will be asked for your domain and database details.${N}"
   echo ""
   read -p "Ready to start? (y/N): " ans
   if [ "${ans,,}" != "y" ]; then wait_enter; return; fi
 
   apt-get update -y >/dev/null 2>&1
-  apt-get install -y curl tar >/dev/null 2>&1
+  apt-get install -y curl >/dev/null 2>&1
 
-  cd /var/www || return
-  if [ ! -d /var/www/pterodactyl-installer ]; then
-    echo -e "${Y}Downloading official installer...${N}"
-    curl -Lo pterodactyl-installer.tar.gz https://github.com/pterodactyl/installer/releases/latest/download/pterodactyl-installer.tar.gz
-    tar --transform='s|installer|pterodactyl-installer|' -xzf pterodactyl-installer.tar.gz
-    rm pterodactyl-installer.tar.gz
-  fi
+  echo -e "${Y}Downloading official installer...${N}"
+  curl -s https://pterodactyl-installer.se -o /var/www/pterodactyl-installer.sh
 
-  sudo bash /var/www/pterodactyl-installer/install.sh
+  sudo bash /var/www/pterodactyl-installer.sh
 
   echo ""
   if [ -d /var/www/pterodactyl ]; then
