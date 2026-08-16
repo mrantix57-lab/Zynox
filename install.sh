@@ -24,7 +24,7 @@ PANEL_AUTHOR="Zynex"
 PANEL_VERSION="3.0"
 DEFAULT_PROD_PORT=6767
 DEFAULT_DEV_PORT=30000
-REPO_URL="https://github.com/JishnuTheGamer/Jtg.git"
+REPO_URL="https://github.com/ZynexTheGamer/Jtg.git"
 
 # High-Contrast Deep ANSI Palette
 C_RESET='\033[0m'
