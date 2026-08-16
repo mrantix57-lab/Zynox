@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import sys
 import tkinter as tk
 from tkinter import filedialog
 
@@ -12,10 +14,42 @@ from xno_theme import (BG_DARK, BG_PANEL, BG_CARD, FG_TEXT, FG_MUTED,
                        FONT_BODY, FONT_SMALL, FONT_CODE, FONT_TERM)
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(APP_DIR, "config.json")
-SCRIPTS_DIR = os.path.join(APP_DIR, "scripts")
 
 NAV_ITEMS = [("Home", 0), ("Script Hub", 1), ("Execute", 2), ("Settings", 3)]
+
+
+def resource_path(rel):
+    base = getattr(sys, "_MEIPASS", APP_DIR)
+    return os.path.join(base, rel)
+
+
+def data_dir():
+    if getattr(sys, "frozen", False):
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        d = os.path.join(base, "XnoExecutor")
+    else:
+        d = APP_DIR
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+DATA_DIR = data_dir()
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+SCRIPTS_DIR = os.path.join(DATA_DIR, "scripts")
+
+
+def ensure_scripts():
+    src = resource_path("scripts")
+    if not os.path.isdir(src):
+        return
+    os.makedirs(SCRIPTS_DIR, exist_ok=True)
+    for name in os.listdir(src):
+        dst = os.path.join(SCRIPTS_DIR, name)
+        if not os.path.exists(dst):
+            try:
+                shutil.copy2(os.path.join(src, name), dst)
+            except Exception:
+                pass
 
 
 class XnoApp(ctk.CTk):
@@ -31,6 +65,7 @@ class XnoApp(ctk.CTk):
         self.rainbow = Rainbow()
         self.config = self._load_config()
         self.engine.dll_path = self.config.get("dll_path", "")
+        ensure_scripts()
 
         self._build_ui()
         self._bind_keys()
